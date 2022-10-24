@@ -6,6 +6,7 @@ enum opCode
 	OP_RETURN,
 	OP_CONSTANT,
 	OP_LONG_CONSTANT,
+	OP_NEGATE,
 };
 
 #endif

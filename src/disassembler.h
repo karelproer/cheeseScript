@@ -42,8 +42,10 @@ int disassembleInstruction(Chunk* chunk, int offset)
 		return disassembleConstantInstruction("CONSTANT", offset, chunk, false);
 	case OP_LONG_CONSTANT:
 		return disassembleConstantInstruction("LONG_CONSTANT", offset, chunk, true);
+	case OP_NEGATE:
+		return disassembleSimpleInstruction("NEGATE", offset);
 	default:
-		printf("unknown opCode: %i", chunk->data[offset]);
+		printf("unknown opCode: %i\n", chunk->data[offset]);
 		return 1;
 	}
 }

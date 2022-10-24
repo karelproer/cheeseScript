@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "disassembler.h"
+#include "vm.h"
 
 int main(int argc, char const *argv[])
 {
@@ -11,14 +11,16 @@ int main(int argc, char const *argv[])
 	addToChunk(&c, 0, 0);
 	addToChunk(&c, 0, 0);
 	addToChunk(&c, 1, 0);
+	addToChunk(&c, OP_NEGATE, 1);
 	addToChunk(&c, OP_RETURN, 2);
 
 	addToValueArray(&c.values, 78.9);
 	addToValueArray(&c.values, 1234.5678);
 
-	printf("ja");
-
-	disassembleChunk(&c, "main");
+	VM vm;
+	initVM(&vm);
+	interpret(&vm, &c);
+	freeVM(&vm);
 
 	freeChunk(&c);
 	return 0;
