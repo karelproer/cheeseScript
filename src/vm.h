@@ -80,7 +80,7 @@ result run(VM* vm)
 			push(vm, vm->chunk->values.data[*vm->ip++]);
 			break;
 		case OP_LONG_CONSTANT:
-			push(vm, vm->chunk->values.data[ *vm->ip++ * 0xffff + *vm->ip++ * 0xff + *vm->ip++]);
+			push(vm, vm->chunk->values.data[*vm->ip++ * 0xff + *vm->ip++]);
 			break;
 		case OP_NEGATE:
 			push(vm, -pop(vm));

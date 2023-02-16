@@ -156,12 +156,11 @@ void addConstantInstrution(Chunk* chunk, uint32_t constant, uint32_t line)
 		addToChunk(chunk, OP_CONSTANT, line);
 		addToChunk(chunk, (uint8_t)constant, line);
 	}
-	else if(constant <= 0xffffff)
+	else if(constant <= 0xffff)
 	{
 		addToChunk(chunk, OP_LONG_CONSTANT, line);
 		addToChunk(chunk, (uint8_t)constant, line);
 		addToChunk(chunk, (uint8_t)constant >> 8, line);
-		addToChunk(chunk, (uint8_t)constant >> 16, line);
 	}
 }
 

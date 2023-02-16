@@ -20,9 +20,9 @@ int disassembleConstantInstruction(const char* name, int offset, Chunk* chunk, b
 		return 2;
 	}
 
-	printValue(chunk->values.data[ chunk->data[offset + 1] * 0xffff + chunk->data[offset + 2] * 0xff + chunk->data[offset + 3]]);
+	printValue(chunk->values.data[chunk->data[offset + 1] * 0xff + chunk->data[offset + 2]]);
 	printf("\n");
-	return 4;
+	return 3;
 }
 
 int disassembleInstruction(Chunk* chunk, int offset)
