@@ -58,6 +58,13 @@ void printStack(VM* vm)
 	printf(" ]");
 }
 
+#define BINARY_OP(op) { \
+		value b = pop(vm); \
+		value a = pop(vm); \
+		push(vm, a op b); \
+	}
+
+
 result run(VM* vm)
 {
 	while (true)
@@ -84,6 +91,14 @@ result run(VM* vm)
 			break;
 		case OP_NEGATE:
 			push(vm, -pop(vm));
+		case OP_ADD:
+			BINARY_OP(+)
+		case OP_SUBTRACT:
+			BINARY_OP(-)
+		case OP_MULTIPLY:
+			BINARY_OP(*)
+		case OP_DIVIDE:
+			BINARY_OP(*)
 		}
 	}	
 }
