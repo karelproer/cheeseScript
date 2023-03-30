@@ -1,9 +1,9 @@
 #ifndef VALUE_H
 #define VALUE_H
 
-typedef double value;
+typedef double Value;
 
-void printValue(value v)
+void printValue(Value v)
 {
 	printf("%g", v);
 }

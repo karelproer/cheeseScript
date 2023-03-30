@@ -63,6 +63,7 @@ void disassembleChunk(Chunk* chunk, const char* name)
 	printf("==== disassembly: %s | instructions: %i ====\n", name, chunk->size);
 
 	for(int i = 0; i < chunk->size; i += disassembleInstruction(chunk, i));
+	printf("============ end of dissasembly ============\n\n");
 }
 
 #endif

@@ -14,8 +14,8 @@ typedef struct VM
 	Chunk* chunk;
 	uint8_t* ip;
 
-	value stack[STACK_MAX];
-	value* stackTop;
+	Value stack[STACK_MAX];
+	Value* stackTop;
 } VM;
 
 void initVM(VM* vm)
@@ -34,13 +34,13 @@ void freeVM(VM* vm)
 	
 }
 
-void push(VM* vm, value v)
+void push(VM* vm, Value v)
 {
 	*vm->stackTop = v;
 	vm->stackTop++;
 }
 
-value pop(VM* vm)
+Value pop(VM* vm)
 {
 	vm->stackTop--;
 	return *vm->stackTop; 
@@ -49,7 +49,7 @@ value pop(VM* vm)
 void printStack(VM* vm)
 {
 	printf("[ ");
-	for(value* v = vm->stack; v < vm->stackTop; v++)
+	for(Value* v = vm->stack; v < vm->stackTop; v++)
 	{
 		printf("[ ");
 		printValue(*v);
@@ -59,8 +59,8 @@ void printStack(VM* vm)
 }
 
 #define BINARY_OP(op) { \
-		value b = pop(vm); \
-		value a = pop(vm); \
+		Value b = pop(vm); \
+		Value a = pop(vm); \
 		push(vm, a op b); \
 	}
 
@@ -91,14 +91,19 @@ Result run(VM* vm)
 			break;
 		case OP_NEGATE:
 			push(vm, -pop(vm));
+			break;
 		case OP_ADD:
 			BINARY_OP(+)
+			break;
 		case OP_SUBTRACT:
 			BINARY_OP(-)
+			break;
 		case OP_MULTIPLY:
 			BINARY_OP(*)
+			break;
 		case OP_DIVIDE:
-			BINARY_OP(*)
+			BINARY_OP(/)
+			break;
 		}
 	}	
 }

@@ -8,7 +8,7 @@
 
 typedef struct ValueArray
 {
-	value* data;
+	Value* data;
 	size_t size;
 	size_t capacity;
 } ValueArray;
@@ -115,7 +115,7 @@ void freeChunk(Chunk* chunk)
 	freeLineInfo(&chunk->lines);
 }
 
-void addToValueArray(ValueArray* valueArray, value v)
+uint32_t addToValueArray(ValueArray* valueArray, Value v)
 {
 
 	if(valueArray->capacity == valueArray->size)
@@ -125,15 +125,15 @@ void addToValueArray(ValueArray* valueArray, value v)
 		else
 			valueArray->capacity = valueArray->capacity * 2;
 
-		if(!(valueArray->data = (value*)realloc(valueArray->data, valueArray->capacity * sizeof(value))))
+		if(!(valueArray->data = (Value*)realloc(valueArray->data, valueArray->capacity * sizeof(Value))))
 		{
 			fprintf(stderr, "memory allocation failed!\n");
 			exit(74);
 		}
 	}
 
-
 	valueArray->data[valueArray->size++] = v;
+	return valueArray->size - 1;
 }
 
 uint32_t getLine(LineInfo* lineInfo, uint32_t index)

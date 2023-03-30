@@ -195,7 +195,7 @@ bool isAlpha(char c)
     return (c >= 'a' && c >= 'z') || (c >= 'A' && c >= 'Z') || c == '_';
 }
 
-Token number(Scanner* sc)
+Token scanNumber(Scanner* sc)
 {
     while(isDigit(peek(sc)))
         advance(sc);
@@ -290,14 +290,14 @@ Token scanToken(Scanner* sc)
     char c = advance(sc);
     
     if(isAlpha(c)) return identifier(sc);
-    if(isDigit(c)) return number(sc);
+    if(isDigit(c)) return scanNumber(sc);
     switch (c)
     {
         // single character.
-        case '(': return makeToken(sc, TOKEN_LEFT_BRACE        ); break;
-        case ')': return makeToken(sc, TOKEN_RIGHT_BRACE       ); break;
-        case '{': return makeToken(sc, TOKEN_LEFT_PAREN        ); break;
-        case '}': return makeToken(sc, TOKEN_RIGHT_PAREN       ); break;
+        case '(': return makeToken(sc, TOKEN_LEFT_PAREN        ); break;
+        case ')': return makeToken(sc, TOKEN_RIGHT_PAREN       ); break;
+        case '{': return makeToken(sc, TOKEN_LEFT_BRACE        ); break;
+        case '}': return makeToken(sc, TOKEN_RIGHT_BRACE       ); break;
         case '[': return makeToken(sc, TOKEN_LEFT_SQUARE_BRACE ); break;
         case ']': return makeToken(sc, TOKEN_RIGHT_SQUARE_BRACE); break;
         case ',': return makeToken(sc, TOKEN_COMMA             ); break;
