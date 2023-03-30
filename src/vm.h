@@ -2,18 +2,12 @@
 #define VM_H
 #include "chunk.h"
 #include "disassembler.h"
+#include "common.h"
 
 #define DEBUG_TRACE_EXECUTION
 #define DEBUG_TRACE_STACK
 // dynamic stack size?
 #define STACK_MAX 1024
-
-typedef enum result
-{
-	RESULT_OK,
-	RESULT_COMPILE_ERROR,
-	RESULT_RUNTIME_ERROR,
-} result;
 
 typedef struct VM
 {
@@ -27,6 +21,12 @@ typedef struct VM
 void initVM(VM* vm)
 {
 	vm->stackTop = vm->stack;
+}
+
+void loadChunk(VM* vm, Chunk* chunk)
+{
+	vm->chunk = chunk;
+	vm->ip = chunk->data;
 }
 
 void freeVM(VM* vm)
@@ -65,7 +65,7 @@ void printStack(VM* vm)
 	}
 
 
-result run(VM* vm)
+Result run(VM* vm)
 {
 	while (true)
 	{
@@ -103,7 +103,7 @@ result run(VM* vm)
 	}	
 }
 
-result interpret(VM* vm, Chunk* chunk)
+Result execute(VM* vm, Chunk* chunk)
 {
 	vm->chunk = chunk;
 	vm->ip = chunk->data;

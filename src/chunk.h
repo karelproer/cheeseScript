@@ -69,7 +69,7 @@ void addToLineInfo(LineInfo* lineInfo, uint32_t line)
 
 		if(!(lineInfo->data = (uint32_t*)realloc(lineInfo->data, lineInfo->capacity * sizeof(uint32_t))))
 		{
-			printf("memory allocation failed!\n");
+			fprintf(stderr, "memory allocation failed!\n");
 			exit(1);
 		}
 	}
@@ -88,8 +88,8 @@ void addToChunk(Chunk* chunk, uint8_t byte, uint32_t line)
 
 		if(!(chunk->data = (uint8_t*)realloc(chunk->data, chunk->capacity)))
 		{
-			printf("memory allocation failed!\n");
-			exit(1);
+			fprintf(stderr, "memory allocation failed!\n");
+			exit(74);
 		}
 
 	}
@@ -127,8 +127,8 @@ void addToValueArray(ValueArray* valueArray, value v)
 
 		if(!(valueArray->data = (value*)realloc(valueArray->data, valueArray->capacity * sizeof(value))))
 		{
-			printf("memory allocation failed!\n");
-			exit(1);
+			fprintf(stderr, "memory allocation failed!\n");
+			exit(74);
 		}
 	}
 
