@@ -34,6 +34,8 @@ typedef enum TokenType
     TOKEN_NIL, TOKEN_THIS, TOKEN_SUPER, TOKEN_TRUE, TOKEN_FALSE, // special values.
     TOKEN_IF, TOKEN_ELSE, TOKEN_FOR, TOKEN_WHILE, // control flow.
 
+    TOKEN_PRINT,
+
     // special tokens.
     TOKEN_EOF, TOKEN_ERROR,
 } TokenType;
@@ -118,7 +120,7 @@ char doublePeek(Scanner* sc)
     return sc->current[1];
 }
 
-char skip(Scanner* sc)
+void skip(Scanner* sc)
 {
     char c = advance(sc);
     if(c == '\n')
@@ -172,7 +174,7 @@ void skipWhiteSpace(Scanner* sc)
     }
 }
 
-Token string(Scanner* sc, char end)
+Token scanString(Scanner* sc, char end)
 {
     while(peek(sc) != end)
     {
@@ -230,6 +232,7 @@ TokenType identifierType(Scanner* sc)
         case 's': return checkKeyword(sc, 1, "uper", TOKEN_SUPER);
         case 'v': return checkKeyword(sc, 1, "ar"  , TOKEN_VAR  );
         case 'w': return checkKeyword(sc, 1, "hile", TOKEN_WHILE);
+        case 'p': return checkKeyword(sc, 1, "rint", TOKEN_PRINT);
         case 'c': 
             if(sc->current - sc->start > 1)
             {
@@ -310,12 +313,12 @@ Token scanToken(Scanner* sc)
         case '/': return makeToken(sc, TOKEN_SLASH             ); break;
         // one or two character.
         case '=': return match(sc, '=') ? makeToken(sc, TOKEN_EQUAL_EQUAL) : makeToken(sc, TOKEN_EQUAL); break;
-        case '!': return match(sc, '=') ? makeToken(sc, TOKEN_BANG_EQUAL ) : makeToken(sc, TOKEN_EQUAL); break;
-        case '<': return match(sc, '=') ? makeToken(sc, TOKEN_LESS_EQUAL ) : makeToken(sc, TOKEN_EQUAL); break;
-        case '>': return match(sc, '=') ? makeToken(sc, TOKEN_MORE_EQUAL ) : makeToken(sc, TOKEN_EQUAL); break;
+        case '!': return match(sc, '=') ? makeToken(sc, TOKEN_BANG_EQUAL ) : makeToken(sc, TOKEN_BANG ); break;
+        case '<': return match(sc, '=') ? makeToken(sc, TOKEN_LESS_EQUAL ) : makeToken(sc, TOKEN_LESS ); break;
+        case '>': return match(sc, '=') ? makeToken(sc, TOKEN_MORE_EQUAL ) : makeToken(sc, TOKEN_MORE ); break;
         // literals
-        case '"': return string(sc, '"');
-        case '\'': return string(sc, '\'');
+        case '"': return scanString(sc, '"');
+        case '\'': return scanString(sc, '\'');
     }
 
     return errorToken(sc, "Unexpected character.");

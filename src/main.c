@@ -45,7 +45,10 @@ Result interpret(const char* source, bool disassemble)
 	Compiler comp;
 	initCompiler(&comp);
 
-	if(compile(&comp, source, &chunk))
+	VM vm;
+	initVM(&vm);
+	
+	if(compile(&comp, source, &chunk, &vm))
 	{
 		freeChunk(&chunk);
 		return RESULT_COMPILE_ERROR;
@@ -57,11 +60,8 @@ Result interpret(const char* source, bool disassemble)
 	if(disassemble)
 		disassembleChunk(&chunk, "main");
 
-	freeCompiler(&comp);
-
-	VM vm;
-	initVM(&vm);
 	loadChunk(&vm, &chunk);
+	freeCompiler(&comp);
 
 	Result r = run(&vm);
 	
@@ -117,7 +117,7 @@ int main(int argc, char const *argv[])
 				fileSet = true;
 			}
 			else
-				printf("Usage: name [filename]\n %d");
+				printf("Usage: name [filename]\n");
 		}
 	}
 	

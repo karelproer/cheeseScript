@@ -52,6 +52,42 @@ int disassembleInstruction(Chunk* chunk, int offset)
 		return disassembleSimpleInstruction("MULTIPLY", offset);
 	case OP_DIVIDE:
 		return disassembleSimpleInstruction("DIVIDE", offset);
+	case OP_TRUE:
+		return disassembleSimpleInstruction("TRUE", offset);
+	case OP_FALSE:
+		return disassembleSimpleInstruction("FALSE", offset);
+	case OP_NIL:
+		return disassembleSimpleInstruction("NIL", offset);
+	case OP_NOT:
+		return disassembleSimpleInstruction("NOT", offset);
+	case OP_NOT_EQUAL:
+		return disassembleSimpleInstruction("NOT_EQUAL", offset);
+	case OP_EQUAL:
+		return disassembleSimpleInstruction("EQUAL", offset);	
+	case OP_LESS:
+		return disassembleSimpleInstruction("LESS", offset);
+	case OP_LESS_EQUAL:
+		return disassembleSimpleInstruction("LESS_EQUAL", offset);
+	case OP_MORE:
+		return disassembleSimpleInstruction("MORE", offset);
+	case OP_MORE_EQUAL:
+		return disassembleSimpleInstruction("MORE_EQUAL", offset);
+	case OP_POP:
+		return disassembleSimpleInstruction("POP", offset);
+	case OP_DEFINE_GLOBAL:
+		return disassembleConstantInstruction("DEFINE_GLOBAL", offset, chunk, false);
+	case OP_DEFINE_LONG_GLOBAL:
+		return disassembleConstantInstruction("LONG_DEFINE_GLOBAL", offset, chunk, true);
+	case OP_GET_GLOBAL:
+		return disassembleConstantInstruction("GET_GLOBAL", offset, chunk, false);
+	case OP_GET_LONG_GLOBAL:
+		return disassembleConstantInstruction("LONG_GET_GLOBAL", offset, chunk, true);	
+	case OP_SET_GLOBAL:
+		return disassembleConstantInstruction("SET_GLOBAL", offset, chunk, false);
+	case OP_SET_LONG_GLOBAL:
+		return disassembleConstantInstruction("LONG_SET_GLOBAL", offset, chunk, true);
+	case OP_PRINT:
+		return disassembleSimpleInstruction("PRINT", offset);
 	default:
 		printf("unknown opCode: %i\n", chunk->data[offset]);
 		return 1;
@@ -60,7 +96,7 @@ int disassembleInstruction(Chunk* chunk, int offset)
 
 void disassembleChunk(Chunk* chunk, const char* name)
 {
-	printf("==== disassembly: %s | instructions: %i ====\n", name, chunk->size);
+	printf("==== disassembly: %s | instructions: %i ====\n", name, (int)chunk->size);
 
 	for(int i = 0; i < chunk->size; i += disassembleInstruction(chunk, i));
 	printf("============ end of dissasembly ============\n\n");
