@@ -62,7 +62,7 @@ void addToLineInfo(LineInfo* lineInfo, uint32_t line)
 
 	if(lineInfo->capacity == lineInfo->size)
 	{
-		if(lineInfo->capacity <= 8)
+		if(lineInfo->capacity < 8)
 			lineInfo->capacity = 8;
 		else
 			lineInfo->capacity = lineInfo->capacity * 2;
@@ -79,9 +79,9 @@ void addToLineInfo(LineInfo* lineInfo, uint32_t line)
 
 void addToChunk(Chunk* chunk, uint8_t byte, uint32_t line)
 {
-	if(chunk->capacity == chunk->size)
+	if(chunk->capacity <= chunk->size)
 	{
-		if(chunk->capacity <= 8)
+		if(chunk->capacity < 8)
 			chunk->capacity = 8;
 		else
 			chunk->capacity = chunk->capacity * 2;
@@ -120,7 +120,7 @@ uint32_t addToValueArray(ValueArray* valueArray, Value v)
 
 	if(valueArray->capacity == valueArray->size)
 	{
-		if(valueArray->capacity <= 8)
+		if(valueArray->capacity < 8)
 			valueArray->capacity = 8;
 		else
 			valueArray->capacity = valueArray->capacity * 2;

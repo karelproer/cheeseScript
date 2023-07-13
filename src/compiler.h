@@ -1,10 +1,30 @@
 #ifndef COMPILER_H
 #define COMPILER_H
 #include <stdlib.h>
+#include <string.h>
 #include "scanner.h"
 // todo: print line of error
 
 struct vm;
+
+typedef struct Local
+{
+    Token name;
+    int depth;
+} Local;
+
+typedef struct Scope
+{
+    Local locals[UINT8_MAX + 1];
+    int localCount;
+    int scopeDepth;
+} Scope;
+
+void initScope(Scope* scope)
+{
+    scope->localCount = 0;
+    scope->scopeDepth = 0;
+}
 
 typedef struct Compiler
 {
@@ -16,6 +36,8 @@ typedef struct Compiler
     bool error;
     bool panic;
 
+    Scope scope;
+
     struct VM* vm;
 } Compiler;
 
@@ -23,6 +45,7 @@ void initCompiler(Compiler* comp)
 {
     comp->error = false;
     comp->panic = false;
+    initScope(&comp->scope);
 }
 
 void freeCompiler(Compiler* comp)
@@ -119,10 +142,45 @@ void emitConstant(Compiler* comp, Value value)
     addConstantInstrution(comp->chunk, makeConstant(comp, value), comp->previous.line);
 }
 
+int emitJump(Compiler* comp, OpCode instruction)
+{
+    emitByte(comp, instruction);
+    emitBytes(comp, 0xff, 0xff);
+    return comp->chunk->size - 2;
+}
+
+void patchJump(Compiler* comp, int offset)
+{
+    int jump = comp->chunk->size - offset - 2;
+
+    if(jump > UINT16_MAX)
+    {
+        errorAtCurrent(comp, "Jump body is too big");
+    }
+
+    comp->chunk->data[offset] = (jump >> 8) & 0xff;
+    comp->chunk->data[offset + 1] = jump & 0xff;
+}
+
+void emitLoop(Compiler* comp, int loopStart)
+{
+    emitByte(comp, OP_LOOP);
+
+    int offset = comp->chunk->size - loopStart + 2;
+    if(offset > UINT16_MAX)
+    {
+        errorAtCurrent(comp, "Loop body is too big");
+    }
+    emitByte(comp, (uint8_t)offset>>8);
+    emitByte(comp, (uint8_t)offset);
+}
+
 void consume(Compiler* comp, TokenType type, const char* message)
 {
-    if(nextToken(comp).type != type)
+    if(comp->current.type != type)
         errorAtCurrent(comp, message);
+    else
+        nextToken(comp);
 }
 
 bool checkToken(Compiler* comp, TokenType type)
@@ -136,6 +194,12 @@ bool matchToken(Compiler* comp, TokenType type)
         return false;
     nextToken(comp);
     return true;
+}
+
+bool identifiersEqual(Token* a, Token* b)
+{
+    if(a->length != b->length) return false;
+    return memcmp(a->start, b->start, a->length) == 0;
 }
 
 typedef enum Precedence
@@ -171,6 +235,8 @@ void literalTrue (Compiler*, bool);
 void literalFalse(Compiler*, bool);
 void literalNil  (Compiler*, bool);
 void variable    (Compiler*, bool);
+void and         (Compiler*, bool);
+void or          (Compiler*, bool);
 
 ParseRule rules[] = {
     [TOKEN_LEFT_PAREN]         = {group        , NULL  , PREC_NONE      },
@@ -198,8 +264,8 @@ ParseRule rules[] = {
     [TOKEN_IDENTIFIER]         = {variable     , NULL  , PREC_NONE      },
     [TOKEN_NUMBER]             = {number       , NULL  , PREC_NONE      },
     [TOKEN_STRING]             = {string       , NULL  , PREC_NONE      },
-    [TOKEN_AND]                = {NULL         , NULL  , PREC_NONE      },
-    [TOKEN_OR]                 = {NULL         , NULL  , PREC_NONE      },
+    [TOKEN_AND]                = {NULL         , and   , PREC_AND       },
+    [TOKEN_OR]                 = {NULL         , or    , PREC_OR        },
     [TOKEN_NOT]                = {NULL         , NULL  , PREC_NONE      },
     [TOKEN_VAR]                = {NULL         , NULL  , PREC_NONE      },
     [TOKEN_CONST]              = {NULL         , NULL  , PREC_NONE      },
@@ -240,7 +306,8 @@ void parsePrecedence(Compiler* comp, Precedence p)
     while(p <= getRule(comp->current.type).precedence)
     {
         nextToken(comp);
-        getRule(comp->previous.type).infix(comp, canAssign);
+        ParseRule rule = getRule(comp->previous.type);
+        rule.infix(comp, canAssign);
     }
 
     if(canAssign && matchToken(comp, TOKEN_EQUAL))
@@ -300,6 +367,22 @@ void binary(Compiler* comp, bool canAssign)
     }
 }
 
+void and(Compiler* comp, bool canAssign)
+{
+    int endJump = emitJump(comp, OP_JUMP_IF_FALSE);
+    emitByte(comp, OP_POP);
+    parsePrecedence(comp, PREC_AND);
+    patchJump(comp, endJump);
+}
+
+void or(Compiler* comp, bool canAssign)
+{
+    int endJump = emitJump(comp, OP_JUMP_IF_TRUE);
+    emitByte(comp, OP_POP);
+    parsePrecedence(comp, PREC_OR);
+    patchJump(comp, endJump);
+}
+
 void literalTrue(Compiler* comp, bool canAssign)
 {
     emitByte(comp, OP_TRUE);
@@ -322,15 +405,37 @@ uint16_t identifierConstant(Compiler* comp, Token* name)
 
 void namedVariable(Compiler* comp, Token name, bool canAssign)
 {
-    OpCode op = OP_GET_GLOBAL;
+    int16_t arg = -1;
+    for(int i = comp->scope.localCount - 1; i >= 0; i--)
+    {
+        Local* local = &comp->scope.locals[i];
+        if(identifiersEqual(&name, &local->name))
+        {
+            if(local->depth == -1)
+            {
+                errorAtCurrent(comp, "Reading a local in its own initializer is not allowed");
+            }
+            arg = i;
+        }
+    }
+    
+    OpCode getOp = OP_GET_LOCAL;
+    OpCode setOp = OP_SET_LOCAL;
+    
+    if(arg == -1)
+    {
+        getOp = OP_GET_GLOBAL;
+        setOp = OP_SET_GLOBAL;
+        arg = identifierConstant(comp, &name);
+    }
+    OpCode op = getOp;
 
     if(canAssign && matchToken(comp, TOKEN_EQUAL))
     {
         expression(comp);
-        op = OP_SET_GLOBAL;
+        op = setOp;
     }
 
-    uint16_t arg = identifierConstant(comp, &name);
     if(arg < 256)
         emitBytes(comp, op, (uint8_t)arg);
     else
@@ -352,6 +457,31 @@ void printStatement(Compiler* comp)
     emitByte(comp, OP_PRINT);
 }
 
+void declaration(Compiler*);
+
+void block(Compiler* comp)
+{
+    while(!checkToken(comp, TOKEN_RIGHT_BRACE) && !checkToken(comp, TOKEN_EOF))
+        declaration(comp);
+
+    consume(comp, TOKEN_RIGHT_BRACE, "Expected '}' after block");
+}
+
+void beginScope(Compiler* comp)
+{
+    comp->scope.scopeDepth++;
+}
+
+void endScope(Compiler* comp)
+{
+    comp->scope.scopeDepth--;
+    while(comp->scope.localCount > 0  && comp->scope.locals[comp->scope.localCount - 1].depth > comp->scope.scopeDepth)
+    {
+        emitByte(comp, OP_POP);
+        comp->scope.localCount--;
+    }
+}
+
 void expressionStatement(Compiler* comp)
 {
     expression(comp);
@@ -359,22 +489,118 @@ void expressionStatement(Compiler* comp)
     emitByte(comp, OP_POP);
 }
 
+void statement(Compiler* comp);
+
+void ifStatement(Compiler* comp)
+{
+    consume(comp, TOKEN_LEFT_PAREN, "Expected '(' after 'if'");
+    expression(comp);
+    consume(comp, TOKEN_RIGHT_PAREN, "Expected ')' after condition");
+
+    int thenJump = emitJump(comp, OP_JUMP_IF_FALSE);
+    emitByte(comp, OP_POP);
+    statement(comp);
+    int elseJump = emitJump(comp, OP_JUMP);
+
+    patchJump(comp, thenJump);
+    emitByte(comp, OP_POP);
+    if(matchToken(comp, TOKEN_ELSE))
+        statement(comp);
+    patchJump(comp, elseJump);
+
+}
+
+void whileStatement(Compiler* comp)
+{
+    int loopStart = comp->chunk->size;
+    consume(comp, TOKEN_LEFT_PAREN, "Expected '(' after 'while'");
+    expression(comp);
+    consume(comp, TOKEN_RIGHT_PAREN, "Expected ')' after condition");
+
+    int exitJump = emitJump(comp, OP_JUMP_IF_FALSE);
+    emitByte(comp, OP_POP);
+    statement(comp);
+
+    emitLoop(comp, loopStart);
+    patchJump(comp, exitJump);
+    emitByte(comp, OP_POP);
+}
+
 void statement(Compiler* comp)
 {
     if(matchToken(comp, TOKEN_PRINT))
         printStatement(comp);
+    else if(matchToken(comp, TOKEN_IF))
+        ifStatement(comp);
+    else if(matchToken(comp, TOKEN_WHILE))
+        whileStatement(comp);
+    else if(matchToken(comp, TOKEN_LEFT_BRACE))
+    {
+        beginScope(comp);
+        block(comp);
+        endScope(comp);
+    }
     else
         expressionStatement(comp);
+}
+
+void addLocal(Compiler* comp, Token name)
+{
+    if (comp->scope.localCount == UINT8_MAX + 1)
+    {
+        errorAtCurrent(comp, "Too many local variables in scope");
+        return;
+    }
+    
+    Local* local = &comp->scope.locals[comp->scope.localCount++];
+    local->name = name;
+    local->depth = -1;
+}
+
+void markInitialized(Compiler* comp)
+{
+    comp->scope.locals[comp->scope.localCount - 1].depth = comp->scope.scopeDepth;
+}
+
+void declareVariable(Compiler* comp)
+{
+    Token* name = &comp->previous;
+    for(int i = comp->scope.localCount - 1; i >= 0; i--)
+    {
+        Local* local = &comp->scope.locals[i];
+        if(local->depth != -1 && local->depth < comp->scope.scopeDepth)
+            break;
+        
+        if(identifiersEqual(name, &local->name))
+        {
+            errorAtCurrent(comp, "A variable with this name already exists");
+        }
+    }
+
+    addLocal(comp, *name);
 }
 
 uint16_t parseVariable(Compiler* comp, const char* error)
 {
     consume(comp, TOKEN_IDENTIFIER, error);
+
+    if(comp->scope.scopeDepth > 0)
+    {
+        declareVariable(comp);
+        return 0;
+    }
+
     return identifierConstant(comp, &comp->previous);
 }
 
 void defineVariable(Compiler* comp, uint16_t global)
 {
+    if(comp->scope.scopeDepth > 0)
+    {
+        markInitialized(comp);
+        return;
+    }
+
     if(global < 256)
         emitBytes(comp, OP_DEFINE_GLOBAL, (uint8_t)global);
     else

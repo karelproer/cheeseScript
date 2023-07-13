@@ -194,7 +194,7 @@ bool isDigit(char c)
 
 bool isAlpha(char c)
 {
-    return (c >= 'a' && c >= 'z') || (c >= 'A' && c >= 'Z') || c == '_';
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
 }
 
 Token scanNumber(Scanner* sc)

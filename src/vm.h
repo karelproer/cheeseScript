@@ -324,6 +324,24 @@ Result run(VM* vm)
 				}
 				break;
 			}
+			case OP_GET_LOCAL:
+				push(vm, vm->stack[*vm->ip++]);
+				break;
+			case OP_SET_LOCAL:
+				vm->stack[*vm->ip++] = peekStack(vm, 0);
+				break;
+			case OP_JUMP:
+				vm->ip += (*vm->ip++ * 0xff + *vm->ip++);
+				break;
+			case OP_LOOP:
+				vm->ip -= (*vm->ip++ * 0xff + *vm->ip++);
+				break;
+			case OP_JUMP_IF_FALSE:
+				vm->ip += (int)isFalse(peekStack(vm, 0)) * (*vm->ip++ * 0xff + *vm->ip++);
+				break;
+			case OP_JUMP_IF_TRUE:
+				vm->ip += (int)!isFalse(peekStack(vm, 0)) * (*vm->ip++ * 0xff + *vm->ip++);
+				break;
 			case OP_PRINT:
 				printValue(pop(vm));
 				printf("\n");
