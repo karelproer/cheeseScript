@@ -526,12 +526,61 @@ void whileStatement(Compiler* comp)
     emitByte(comp, OP_POP);
 }
 
+void varDeclaration(Compiler*);
+
+void forStatement(Compiler* comp)
+{
+    consume(comp, TOKEN_LEFT_PAREN, "Expected '(' after 'for'");
+    beginScope(comp);
+    if(matchToken(comp, TOKEN_SEMICOLON))
+    {}
+    else if(matchToken(comp, TOKEN_VAR))
+        varDeclaration(comp);
+    else
+        expressionStatement(comp);
+
+    int loopStart = comp->chunk->size;
+    int exitJump = -1;
+    if(!matchToken(comp, TOKEN_SEMICOLON))
+    {
+        expression(comp);
+        consume(comp, TOKEN_SEMICOLON, "Expected ';' after condition");
+
+        exitJump = emitJump(comp, OP_JUMP_IF_FALSE);
+        emitByte(comp, OP_POP);
+    }
+    if(!matchToken(comp, TOKEN_LEFT_PAREN))
+    {
+        int bodyJump = emitJump(comp, OP_JUMP);
+        int incrementStart = comp->chunk->size;
+        expression(comp);
+        emitByte(comp, OP_POP);
+
+        consume(comp, TOKEN_RIGHT_PAREN, "Expected ')' after for clauses");
+        emitLoop(comp, loopStart);
+        loopStart = incrementStart;
+        patchJump(comp, bodyJump);
+    }
+
+    statement(comp);
+    emitLoop(comp, loopStart);
+
+    if(exitJump != -1)
+    {
+        patchJump(comp, exitJump);
+        emitByte(comp, OP_POP);
+    }
+    endScope(comp);
+}
+
 void statement(Compiler* comp)
 {
     if(matchToken(comp, TOKEN_PRINT))
         printStatement(comp);
     else if(matchToken(comp, TOKEN_IF))
         ifStatement(comp);
+    else if(matchToken(comp, TOKEN_FOR))
+        forStatement(comp);
     else if(matchToken(comp, TOKEN_WHILE))
         whileStatement(comp);
     else if(matchToken(comp, TOKEN_LEFT_BRACE))
