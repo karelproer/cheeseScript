@@ -1,6 +1,7 @@
 #ifndef OPCODE_H
 #define OPCODE_H
 // todo: POPN
+// todo: remove print
 
 typedef enum OpCode
 {
@@ -35,7 +36,12 @@ typedef enum OpCode
 	OP_LOOP,
 	OP_JUMP_IF_FALSE,
 	OP_JUMP_IF_TRUE,
+	OP_CALL,
 	OP_PRINT,
+	OP_CLOSURE,
+	OP_GET_UPVALUE,
+	OP_SET_UPVALUE,
+	OP_CLOSE_UPVALUE,
 } OpCode;
 
 #endif

@@ -29,14 +29,14 @@ int disassembleByteInstruction(const char* name, int offset, Chunk* chunk)
 {
 	uint8_t slot = chunk->data[offset+1];
 	printf("%-16s %4d\n", name, slot);
-	return offset + 2;
+	return 2;
 }
 
 int disassembleJumpInstruction(const char* name, int offset, int sign, Chunk* chunk)
 {
 	uint16_t jump = chunk->data[offset+1] * 0xff + chunk->data[offset+2];
 	printf("%-16s %4d -> %d\n", name, offset, offset + 3 + sign * jump);
-	return offset + 3;
+	return 3;
 }
 
 int disassembleInstruction(Chunk* chunk, int offset)
@@ -112,8 +112,25 @@ int disassembleInstruction(Chunk* chunk, int offset)
 		return disassembleJumpInstruction("JUMP_IF_FALSE", offset, 1, chunk);
 	case OP_JUMP_IF_TRUE:
 		return disassembleJumpInstruction("JUMP_IF_TRUE", offset, 1, chunk);
+	case OP_CALL:
+		return disassembleByteInstruction("CALL", offset, chunk);
 	case OP_PRINT:
 		return disassembleSimpleInstruction("PRINT", offset);
+	case OP_CLOSURE: {
+		uint8_t upvalueCount = chunk->data[offset + 1];
+		printf("CLOSURE    upvalues: %d\n", upvalueCount);
+		for(int i = 0; i < upvalueCount; i++)
+		{
+			printf("%04d    |                %s %d\n", offset + 2 + i *2, chunk->data[offset + 2 + i] ? "local" : "upvalue", chunk->data[offset + 2 + i * 2 + 1]);	
+		}
+		return 2 + upvalueCount * 2;
+	}
+	case OP_GET_UPVALUE:
+		return disassembleByteInstruction("GET_UPVALUE", offset, chunk);
+	case OP_SET_UPVALUE:
+		return disassembleByteInstruction("SET_UPVALUE", offset, chunk);
+	case OP_CLOSE_UPVALUE:
+		return disassembleSimpleInstruction("CLOSE_UPVALUE", offset);
 	default:
 		printf("unknown opCode: %i\n", chunk->data[offset]);
 		return 1;

@@ -32,7 +32,7 @@ typedef enum TokenType
     TOKEN_AND, TOKEN_OR, TOKEN_NOT, // logic.
     TOKEN_VAR, TOKEN_CONST, TOKEN_FUN, TOKEN_CLASS, // declarations.
     TOKEN_NIL, TOKEN_THIS, TOKEN_SUPER, TOKEN_TRUE, TOKEN_FALSE, // special values.
-    TOKEN_IF, TOKEN_ELSE, TOKEN_FOR, TOKEN_WHILE, // control flow.
+    TOKEN_IF, TOKEN_ELSE, TOKEN_FOR, TOKEN_WHILE, TOKEN_RETURN, // control flow.
 
     TOKEN_PRINT,
 
@@ -225,14 +225,15 @@ TokenType identifierType(Scanner* sc)
 {
     switch (*sc->start)
     {
-        case 'a': return checkKeyword(sc, 1, "nd"  , TOKEN_AND  );
-        case 'e': return checkKeyword(sc, 1, "lse" , TOKEN_ELSE );
-        case 'i': return checkKeyword(sc, 1, "f"   , TOKEN_IF   );
-        case 'o': return checkKeyword(sc, 1, "r"   , TOKEN_OR   );
-        case 's': return checkKeyword(sc, 1, "uper", TOKEN_SUPER);
-        case 'v': return checkKeyword(sc, 1, "ar"  , TOKEN_VAR  );
-        case 'w': return checkKeyword(sc, 1, "hile", TOKEN_WHILE);
-        case 'p': return checkKeyword(sc, 1, "rint", TOKEN_PRINT);
+        case 'a': return checkKeyword(sc, 1, "nd"   , TOKEN_AND   );
+        case 'e': return checkKeyword(sc, 1, "lse"  , TOKEN_ELSE  );
+        case 'i': return checkKeyword(sc, 1, "f"    , TOKEN_IF    );
+        case 'o': return checkKeyword(sc, 1, "r"    , TOKEN_OR    );
+        case 's': return checkKeyword(sc, 1, "uper" , TOKEN_SUPER );
+        case 'v': return checkKeyword(sc, 1, "ar"   , TOKEN_VAR   );
+        case 'w': return checkKeyword(sc, 1, "hile" , TOKEN_WHILE );
+        case 'p': return checkKeyword(sc, 1, "rint" , TOKEN_PRINT );
+        case 'r': return checkKeyword(sc, 1, "eturn", TOKEN_RETURN);
         case 'c': 
             if(sc->current - sc->start > 1)
             {

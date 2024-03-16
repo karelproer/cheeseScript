@@ -39,34 +39,23 @@ char* readFile(const char* path)
 
 Result interpret(const char* source, bool disassemble)
 {
-	Chunk chunk;
-	initChunk(&chunk);
-
-	Compiler comp;
-	initCompiler(&comp);
-
 	VM vm;
 	initVM(&vm);
 	
-	if(compile(&comp, source, &chunk, &vm))
-	{
-		freeChunk(&chunk);
+	ObjFunction* function = compile(source, &vm, disassemble);
+		
+	if(!function)
 		return RESULT_COMPILE_ERROR;
-	}
 
-	if(chunk.size == 0)
+	if(function->chunk.size == 0)
 		return RESULT_OK;
-	
-	if(disassemble)
-		disassembleChunk(&chunk, "main");
 
-	loadChunk(&vm, &chunk);
-	freeCompiler(&comp);
+	push(&vm, OBJ_VAL(function));
+	callFunction(&vm, function, 0, NULL);
 
 	Result r = run(&vm);
 	
 	freeVM(&vm);
-	freeChunk(&chunk);
 
 	return r;
 }

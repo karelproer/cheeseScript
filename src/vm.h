@@ -1,25 +1,42 @@
 #ifndef VM_H
 #define VM_H
 #include <stdarg.h>
+#include <time.h>
 #include "chunk.h"
 #include "disassembler.h"
 #include "common.h"
 #include "table.h"
+#include "object.h"
 
 //#define DEBUG_TRACE_EXECUTION
 //#define DEBUG_TRACE_STACK
-// dynamic stack size?
-#define STACK_MAX 1024
-
+// dynamic stack size??
+#define STACK_MAX 65536
+#define FRAME_MAX 256
 // todo: chunk naming
+
+Value clockNative(int argCount, Value* args)
+{
+	return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+}
+
+typedef struct CallFrame
+{
+	ObjFunction* function;
+	uint8_t* ip;
+	Value* slots;
+	ObjUpvalue** upvalues;
+} CallFrame;
 
 typedef struct VM
 {
-	Chunk* chunk;
-	uint8_t* ip;
+	CallFrame frames[FRAME_MAX];
+	int frameCount;
 
 	Value stack[STACK_MAX];
 	Value* stackTop;
+
+	ObjUpvalue* openUpvalues;
 
 	Obj* objects;
 	Table strings;
@@ -40,6 +57,7 @@ ObjString* copyString(VM* vm, const char* chars, int length)
 		return interned;
 
 	interned = (ObjString*)malloc(sizeof(ObjString) + length + 1);
+	interned->type = OBJ_STRING;
 	interned->length = length;
 	registerObject(vm, (Obj*)interned);
 	memcpy(interned->chars, chars, length);
@@ -49,18 +67,31 @@ ObjString* copyString(VM* vm, const char* chars, int length)
 	return interned;
 }
 
+ObjNative* newNative(struct VM* vm, NativeFun fun, int arity, const char* name)
+{
+	ObjNative* native = (ObjNative*)allocateObject(vm, sizeof(ObjNative), OBJ_NATIVE);
+	native->arity = arity;
+	native->fun = fun;
+	native->name = copyString(vm, name, strlen(name));
+	return native;
+}
+
+void defineNative(VM* vm, const char* name, NativeFun function, int arity)
+{
+	ObjNative* native = newNative(vm, function, arity, name);
+	tableSet(&vm->globals, native->name, OBJ_VAL(native));
+}
+
 void initVM(VM* vm)
 {
 	vm->stackTop = vm->stack;
 	vm->objects = NULL;
+	vm->frameCount = 0;
+	vm->openUpvalues = NULL;
 	initTable(&vm->strings);
 	initTable(&vm->globals);
-}
 
-void loadChunk(VM* vm, Chunk* chunk)
-{
-	vm->chunk = chunk;
-	vm->ip = chunk->data;
+	defineNative(vm, "clock", clockNative, 0);
 }
 
 void freeObjects(VM* vm)
@@ -125,7 +156,17 @@ void runtimeError(VM* vm, const char* format, ...)
 	fprintf(stderr, "\n");
 	// todo: call stack trace
 
-	fprintf(stderr, "at line %d.\n", vm->chunk->lines.data[vm->ip - vm->chunk->data - 1]);
+	for(int i = vm->frameCount - 1; i >= 0; i--)
+	{
+		CallFrame* frame = &vm->frames[i];
+		ObjFunction* function = frame->function;
+		size_t instruction = frame->ip - function->chunk.data - 1;
+		fprintf(stderr, "[line %d] in ", getLine(&function->chunk.lines, function->chunk.data[instruction]));
+		if(function->name == NULL)
+			fprintf(stderr, "script\n");
+		else
+			fprintf(stderr, "%s()\n", function->name->chars);
+	}
 }
 
 bool isFalse(Value v)
@@ -145,6 +186,56 @@ bool valuesEqual(Value a, Value b)
 		case VAL_OBJ: return AS_OBJ(a) == AS_OBJ(b);
 		default: return true;
 	}
+}
+
+bool callFunction(VM* vm, ObjFunction* function, int argCount, ObjUpvalue** upvalues)
+{
+	if(argCount != function->arity)
+	{
+		runtimeError(vm, "Expected %d arguments, but got %d", function->arity, argCount);
+		return false;
+	}
+	CallFrame* frame = &vm->frames[vm->frameCount++];
+	frame->function = function;
+	frame->ip = function->chunk.data;
+	frame->slots = vm->stackTop - argCount - 1;
+	frame->upvalues = upvalues;
+	return true;
+}
+
+bool callNative(VM* vm, ObjNative* native, int argCount)
+{
+	if(argCount != native->arity && native->arity != -1)
+	{
+		runtimeError(vm, "Expected %d arguments, but got %d", native->arity, argCount);
+		return false;
+	}
+
+	Value result = native->fun(argCount, vm->stackTop - argCount);
+	vm->stackTop -= argCount + 1;
+	push(vm, result);
+	return true;
+}
+
+bool callValue(VM* vm, Value callee, int argCount)
+{
+	if(IS_OBJ(callee))
+	{
+		switch(OBJ_TYPE(callee))
+		{
+			case OBJ_FUNCTION:
+				return callFunction(vm, AS_FUNCTION(callee), argCount, NULL);
+			case OBJ_NATIVE:
+				return callNative(vm, AS_NATIVE(callee), argCount);
+			case OBJ_CLOSURE:
+				return callFunction(vm, AS_CLOSURE(callee)->function, argCount, AS_CLOSURE(callee)->upvalues);
+			default:
+				break;
+		}
+	}
+
+	runtimeError(vm, "Object is not callable");
+	return false;
 }
 
 void concatenate(VM* vm)
@@ -170,8 +261,40 @@ void concatenate(VM* vm)
 		push(vm, type(a op b)); \
 	}
 
+ObjUpvalue* captureUpvalue(VM* vm, Value* local)
+{
+	ObjUpvalue** prevUpvalue = &vm->openUpvalues;
+	ObjUpvalue* upvalue = vm->openUpvalues;
+	while(upvalue != NULL && upvalue->value > local)
+	{
+		prevUpvalue = &upvalue->nextUpvalue;
+		upvalue = upvalue->nextUpvalue;
+	}
+	if(upvalue != NULL && upvalue->value == local)
+		return upvalue;
+
+
+	ObjUpvalue* new = newUpvalue(local, vm);
+	new->nextUpvalue = upvalue;
+	
+	*prevUpvalue = new;
+	return new;
+}
+
+void closeUpvalues(VM* vm, Value* last)
+{
+	while(vm->openUpvalues != NULL && vm->openUpvalues->value >= last)
+	{
+		ObjUpvalue* upvalue = vm->openUpvalues;
+		upvalue->closed = *upvalue->value;
+		upvalue->value = &upvalue->closed;
+		vm->openUpvalues = upvalue->nextUpvalue;
+	}
+}
+
 Result run(VM* vm)
 {
+	CallFrame* frame = &vm->frames[vm->frameCount - 1];
 	while (true)
 	{
 	#ifdef DEBUG_TRACE_STACK
@@ -180,19 +303,31 @@ Result run(VM* vm)
 		printf("\n");
 	#endif
 	#ifdef DEBUG_TRACE_EXECUTION
-		disassembleInstruction(vm->chunk, (int)(vm->ip - vm->chunk->data));
+		disassembleInstruction(&frame->function->chunk, (int)(frame->ip - frame->function->chunk.data));
 	#endif
-		switch (*vm->ip++)
+		switch (*frame->ip++)
 		{
 			case OP_RETURN:
-				//printValue(pop(vm));
-				//printf("\n");
-				return RESULT_OK;
+			{
+				Value value = pop(vm);
+				closeUpvalues(vm, frame->slots);
+				vm->frameCount--;
+				if(vm->frameCount == 0)
+				{
+					pop(vm);
+					return RESULT_OK;
+				}
+
+				vm->stackTop = frame->slots;
+				push(vm, value);
+				frame = &vm->frames[vm->frameCount - 1];
+				break;
+			}
 			case OP_CONSTANT:
-				push(vm, vm->chunk->values.data[*vm->ip++]);
+				push(vm, frame->function->chunk.values.data[*frame->ip++]);
 				break;
 			case OP_LONG_CONSTANT:
-				push(vm, vm->chunk->values.data[*vm->ip++ * 0xff + *vm->ip++]);
+				push(vm, frame->function->chunk.values.data[*frame->ip++ * 0xff + *frame->ip++]);
 				break;
 			case OP_NEGATE:
 				if(!IS_NUMBER(top(vm)))
@@ -270,19 +405,19 @@ Result run(VM* vm)
 				break;
 			case OP_DEFINE_GLOBAL:
 			{
-				ObjString* name = AS_STRING(vm->chunk->values.data[*vm->ip++]);
+				ObjString* name = AS_STRING(frame->function->chunk.values.data[*frame->ip++]);
 				tableSet(&vm->globals, name, pop(vm));
 				break;
 			}
 			case OP_DEFINE_LONG_GLOBAL:
 			{
-				ObjString* name = AS_STRING(vm->chunk->values.data[*vm->ip++ * 0xff + *vm->ip++]);
+				ObjString* name = AS_STRING(frame->function->chunk.values.data[*frame->ip++ * 0xff + *frame->ip++]);
 				tableSet(&vm->globals, name, pop(vm));
 				break;
 			}
 			case OP_GET_GLOBAL:
 			{
-				ObjString* name = AS_STRING(vm->chunk->values.data[*vm->ip++]);
+				ObjString* name = AS_STRING(frame->function->chunk.values.data[*frame->ip++]);
 				Value value;
 				if(!tableGet(&vm->globals, name, &value))
 				{
@@ -294,7 +429,7 @@ Result run(VM* vm)
 			}
 			case OP_GET_LONG_GLOBAL:
 			{
-				ObjString* name = AS_STRING(vm->chunk->values.data[*vm->ip++ * 0xff + *vm->ip++]);
+				ObjString* name = AS_STRING(frame->function->chunk.values.data[*frame->ip++ * 0xff + *frame->ip++]);
 				Value value;
 				if(!tableGet(&vm->globals, name, &value))
 				{
@@ -306,7 +441,7 @@ Result run(VM* vm)
 			}
 			case OP_SET_GLOBAL:
 			{
-				ObjString* name = AS_STRING(vm->chunk->values.data[*vm->ip++]);
+				ObjString* name = AS_STRING(frame->function->chunk.values.data[*frame->ip++]);
 				if(tableSet(&vm->globals, name, peekStack(vm, 0)))
 				{
 					runtimeError(vm, "Undefined variable '%s'.", name->chars);
@@ -316,7 +451,7 @@ Result run(VM* vm)
 			}
 			case OP_SET_LONG_GLOBAL:
 			{
-				ObjString* name = AS_STRING(vm->chunk->values.data[*vm->ip++ * 0xff + *vm->ip++]);
+				ObjString* name = AS_STRING(frame->function->chunk.values.data[*frame->ip++ * 0xff + *frame->ip++]);
 				if(tableSet(&vm->globals, name, peekStack(vm, 0)))
 				{
 					runtimeError(vm, "Undefined variable '%s'.", name->chars);
@@ -325,35 +460,74 @@ Result run(VM* vm)
 				break;
 			}
 			case OP_GET_LOCAL:
-				push(vm, vm->stack[*vm->ip++]);
+				push(vm, frame->slots[*frame->ip++]);
 				break;
 			case OP_SET_LOCAL:
-				vm->stack[*vm->ip++] = peekStack(vm, 0);
+				frame->slots[*frame->ip++] = peekStack(vm, 0);
 				break;
 			case OP_JUMP:
-				vm->ip += (*vm->ip++ * 0xff + *vm->ip++);
+				frame->ip += (*frame->ip++ * 0xff + *frame->ip++);
 				break;
 			case OP_LOOP:
-				vm->ip -= (*vm->ip++ * 0xff + *vm->ip++);
+				frame->ip -= (*frame->ip++ * 0xff + *frame->ip++);
 				break;
 			case OP_JUMP_IF_FALSE:
-				vm->ip += (int)isFalse(peekStack(vm, 0)) * (*vm->ip++ * 0xff + *vm->ip++);
+				frame->ip += (int)isFalse(peekStack(vm, 0)) * (*frame->ip++ * 0xff + *frame->ip++);
 				break;
 			case OP_JUMP_IF_TRUE:
-				vm->ip += (int)!isFalse(peekStack(vm, 0)) * (*vm->ip++ * 0xff + *vm->ip++);
+				frame->ip += (int)!isFalse(peekStack(vm, 0)) * (*frame->ip++ * 0xff + *frame->ip++);
 				break;
+			case OP_CALL:
+			{
+				int argCount = *frame->ip++;
+				if(!callValue(vm, peekStack(vm, argCount), argCount))
+					return RESULT_RUNTIME_ERROR;
+				frame = &vm->frames[vm->frameCount - 1];
+				break;
+			}
 			case OP_PRINT:
 				printValue(pop(vm));
 				printf("\n");
 				break;
+			case OP_CLOSURE:
+			{
+				ObjFunction* function = AS_FUNCTION(pop(vm));
+				uint8_t upvalueCount = *frame->ip++;
+				ObjClosure* closure = newClosure(function, upvalueCount, vm);
+				for(uint8_t i = 0; i < upvalueCount; i++)
+				{
+					bool isLocal = *frame->ip++;
+					uint8_t index = *frame->ip++;
+					if(isLocal)
+					{
+						closure->upvalues[i] = captureUpvalue(vm, frame->slots + index);
+					}
+					else
+					{
+						closure->upvalues[i] = frame->upvalues[index];
+					}
+				}
+				push(vm, OBJ_VAL(closure));
+				break;
+			}
+			case OP_GET_UPVALUE:
+			{
+				uint8_t index = *frame->ip++;
+				push(vm, *frame->upvalues[index]->value);
+				break;
+			}
+			case OP_SET_UPVALUE:
+			{
+				uint8_t index = *frame->ip++;
+				*frame->upvalues[index]->value = peekStack(vm, 0);
+				break;
+			}
 		}
 	}	
 }
 
 Result execute(VM* vm, Chunk* chunk)
 {
-	vm->chunk = chunk;
-	vm->ip = chunk->data;
 	return run(vm);
 }
 
